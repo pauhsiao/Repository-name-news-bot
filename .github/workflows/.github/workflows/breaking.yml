@@ -1,6 +1,6 @@
 name: 突發新聞偵測
 
-  on:
+  "on":
     schedule:
       - cron: '0 */2 * * *'
     workflow_dispatch:
