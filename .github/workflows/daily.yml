@@ -1,4 +1,4 @@
-name: 每日新聞摘要
+name: daily-news
 
   "on":
     schedule:
@@ -14,7 +14,7 @@ name: 每日新聞摘要
           with:
             python-version: '3.11'
         - run: pip install -r requirements.txt
-        - name: 執行每日摘要
+        - name: run-daily
           env:
             ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
             LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
