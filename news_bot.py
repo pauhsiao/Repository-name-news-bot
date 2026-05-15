@@ -51,19 +51,23 @@ def analyze_with_claude(articles, mode):
     return message.content[0].text.strip()
 
 def send_line_message(text):
-    response = requests.post(
-        "https://api.line.me/v2/bot/message/push",
-        headers={
-            "Authorization": f"Bearer {os.environ['LINE_CHANNEL_ACCESS_TOKEN']}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "to": os.environ["LINE_USER_ID"],
-            "messages": [{"type": "text", "text": text}],
-        },
-    )
-    print(f"LINE API: {response.status_code}")
-    return response.ok
+    user_ids = os.environ["LINE_USER_ID"].split(",")
+    headers = {
+        "Authorization": f"Bearer {os.environ['LINE_CHANNEL_ACCESS_TOKEN']}",
+        "Content-Type": "application/json",
+    }
+    for user_id in user_ids:
+        user_id = user_id.strip()
+        response = requests.post(
+            "https://api.line.me/v2/bot/message/push",
+            headers=headers,
+            json={
+                "to": user_id,
+                "messages": [{"type": "text", "text": text}],
+            },
+        )
+        print(f"LINE API {user_id}: {response.status_code}")
+    return True
 
 def main():
     mode = os.environ.get("MODE", "daily")
