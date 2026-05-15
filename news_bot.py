@@ -7,23 +7,32 @@ import requests
 from datetime import datetime, timezone
 
 RSS_FEEDS = [
-    # 國際新聞
+    # 國際綜合
     ("Reuters", "https://feeds.reuters.com/reuters/topNews"),
     ("AP News", "https://feeds.apnews.com/rss/apf-topnews"),
     ("BBC World", "http://feeds.bbci.co.uk/news/world/rss.xml"),
     ("BBC Chinese", "https://feeds.bbci.co.uk/zhongwen/trad/rss.xml"),
+    ("CNN", "http://rss.cnn.com/rss/edition.rss"),
     ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
     ("The Guardian", "https://www.theguardian.com/world/rss"),
+    ("NPR", "https://feeds.npr.org/1001/rss.xml"),
+    ("France 24", "https://www.france24.com/en/rss"),
+    ("DW", "https://rss.dw.com/xml/rss-en-all"),
+    ("NYT", "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"),
+    ("Washington Post", "https://feeds.washingtonpost.com/rss/world"),
     # 財經
     ("Reuters Business", "https://feeds.reuters.com/reuters/businessNews"),
+    ("Bloomberg", "https://feeds.bloomberg.com/markets/news.rss"),
     ("CNBC Finance", "https://search.cnbc.com/rs/search/combinedcombined/rss?partnerId=wrss01&id=10001147"),
     ("MarketWatch", "https://feeds.marketwatch.com/marketwatch/topstories/"),
     ("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
+    ("WSJ", "https://feeds.a.dj.com/rss/RSSWorldNews.xml"),
     # 科技
     ("Reuters Tech", "https://feeds.reuters.com/reuters/technologyNews"),
     ("TechCrunch", "https://techcrunch.com/feed/"),
     ("The Verge", "https://www.theverge.com/rss/index.xml"),
     ("Ars Technica", "https://feeds.arstechnica.com/arstechnica/index"),
+    ("Wired", "https://www.wired.com/feed/rss"),
 ]
 
 def hash_title(title):
