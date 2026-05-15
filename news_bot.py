@@ -1,4 +1,6 @@
 import os
+import json
+import hashlib
 import feedparser
 import anthropic
 import requests
@@ -23,6 +25,20 @@ RSS_FEEDS = [
     ("The Verge", "https://www.theverge.com/rss/index.xml"),
     ("Ars Technica", "https://feeds.arstechnica.com/arstechnica/index"),
 ]
+
+def load_seen():
+    try:
+        with open("seen_news.json", "r") as f:
+            return set(json.load(f))
+    except:
+        return set()
+
+def save_seen(seen):
+    with open("seen_news.json", "w") as f:
+        json.dump(list(seen)[-500:], f)
+
+def hash_title(title):
+    return hashlib.md5(title.encode()).hexdigest()
 
 def fetch_news():
     articles = []
@@ -81,6 +97,18 @@ def main():
     print(f"Mode: {mode}")
     articles = fetch_news()
     print(f"Fetched {len(articles)} articles")
+
+    if mode == "breaking":
+        seen = load_seen()
+        new_articles = [a for a in articles if hash_title(a["title"]) not in seen]
+        if not new_articles:
+            print("No new articles")
+            return
+        seen.update(hash_title(a["title"]) for a in new_articles)
+        save_seen(seen)
+        articles = new_articles
+        print(f"{len(articles)} new articles to check")
+
     result = analyze_with_claude(articles, mode)
     if mode == "breaking" and result == "NONE":
         print("No breaking news")
