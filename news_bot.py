@@ -40,6 +40,85 @@ def save_seen(seen):
 def hash_title(title):
     return hashlib.md5(title.encode()).hexdigest()
 
+def get_taiwan_stocks():
+    from datetime import timedelta
+    headers = {"User-Agent": "Mozilla/5.0"}
+    stock_totals = {}
+    days_found = 0
+    today = datetime.now(timezone.utc)
+
+    for i in range(1, 12):
+        if days_found >= 5:
+            break
+        d = today - timedelta(days=i)
+        if d.weekday() >= 5:
+            continue
+        date_str = d.strftime("%Y%m%d")
+        try:
+            url = f"https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json&date={date_str}&type=ALLBUT0999"
+            r = requests.get(url, headers=headers, timeout=15)
+            data = r.json()
+            if data.get("stat") != "OK":
+                continue
+            days_found += 1
+            for table in data.get("tables", []):
+                fields = table.get("fields", [])
+                if not fields or "成交股數" not in str(fields):
+                    continue
+                for row in table.get("data", []):
+                    if len(row) < 9:
+                        continue
+                    try:
+                        code = row[0].strip()
+                        name = row[1].strip()
+                        vol = int(row[2].replace(",", ""))
+                        close = row[8].replace(",", "")
+                        change = row[10].replace(",", "") if len(row) > 10 else "-"
+                        if code not in stock_totals:
+                            stock_totals[code] = {"name": name, "vol": 0, "close": close, "change": change}
+                        stock_totals[code]["vol"] += vol
+                    except:
+                        continue
+                break
+        except Exception as e:
+            print(f"TWSE error {date_str}: {e}")
+
+    top = sorted(stock_totals.items(), key=lambda x: x[1]["vol"], reverse=True)[:10]
+    return top, days_found
+
+def analyze_taiwan_stocks(top_stocks, days):
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    stocks_text = "\n".join([
+        f"{code} {info['name']} | 近{days}日總量:{info['vol']:,} | 收盤:{info['close']} | 漲跌:{info['change']}"
+        for code, info in top_stocks
+    ])
+    prompt = f"""以下是台灣股市近{days}個交易日成交量前10名的熱門股票：
+
+{stocks_text}
+
+請用繁體中文分析，格式如下：
+
+📈 台股熱門股分析（近{days}日）
+━━━━━━━━━━━━━━━
+🔥 前5大熱門股：
+1. [代號 名稱] - 收盤$[價] [漲跌]
+   原因分析：[為何成交量大，可能的市場關注點]
+
+2. ...
+
+💡 今日操作建議：
+[根據熱門股和市場情況，給出2-3點實用的操作方向]
+
+━━━━━━━━━━━━━━━
+⚠️ 以上為參考資訊，投資有風險，請謹慎評估"""
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return message.content[0].text.strip()
+
 def fetch_news():
     articles = []
     for source, url in RSS_FEEDS:
@@ -106,6 +185,19 @@ def main():
     if mode == "breaking" and result == "NONE":
         print("No breaking news")
         return
+
+    if mode == "daily":
+        try:
+            top_stocks, days = get_taiwan_stocks()
+            if top_stocks:
+                stock_report = analyze_taiwan_stocks(top_stocks, days)
+                send_line_message(result)
+                send_line_message(stock_report)
+                print("Done with stocks!")
+                return
+        except Exception as e:
+            print(f"Stock error: {e}")
+
     send_line_message(result)
     print("Done!")
 
