@@ -26,19 +26,37 @@ RSS_FEEDS = [
     ("Ars Technica", "https://feeds.arstechnica.com/arstechnica/index"),
 ]
 
-def load_seen():
-    try:
-        with open("seen_news.json", "r") as f:
-            return set(json.load(f))
-    except:
-        return set()
-
-def save_seen(seen):
-    with open("seen_news.json", "w") as f:
-        json.dump(list(seen)[-500:], f)
-
 def hash_title(title):
     return hashlib.md5(title.encode()).hexdigest()
+
+def load_seen():
+    import base64
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not token or not repo:
+        return set(), None
+    url = f"https://api.github.com/repos/{repo}/contents/seen_news.json"
+    r = requests.get(url, headers={"Authorization": f"token {token}"})
+    if r.status_code == 200:
+        content = base64.b64decode(r.json()["content"]).decode()
+        return set(json.loads(content)), r.json()["sha"]
+    return set(), None
+
+def save_seen(seen, sha):
+    import base64
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not token or not repo:
+        return
+    content = base64.b64encode(json.dumps(list(seen)[-500:]).encode()).decode()
+    payload = {"message": "Update seen news", "content": content}
+    if sha:
+        payload["sha"] = sha
+    requests.put(
+        f"https://api.github.com/repos/{repo}/contents/seen_news.json",
+        headers={"Authorization": f"token {token}", "Content-Type": "application/json"},
+        json=payload,
+    )
 
 def get_taiwan_stocks():
     from datetime import timedelta
@@ -171,13 +189,13 @@ def main():
     print(f"Fetched {len(articles)} articles")
 
     if mode == "breaking":
-        seen = load_seen()
+        seen, sha = load_seen()
         new_articles = [a for a in articles if hash_title(a["title"]) not in seen]
         if not new_articles:
             print("No new articles")
             return
         seen.update(hash_title(a["title"]) for a in new_articles)
-        save_seen(seen)
+        save_seen(seen, sha)
         articles = new_articles
         print(f"{len(articles)} new articles to check")
 
