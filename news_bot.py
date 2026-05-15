@@ -137,6 +137,92 @@ def analyze_taiwan_stocks(top_stocks, days):
     )
     return message.content[0].text.strip()
 
+def get_us_stocks(articles):
+    import yfinance as yf
+
+    indices = {"S&P500": "^GSPC", "納斯達克": "^IXIC", "道瓊": "^DJI"}
+    popular = ["AAPL","MSFT","NVDA","TSLA","META","AMZN","GOOGL","AMD","NFLX","PLTR","TSM","BABA"]
+
+    indices_text = []
+    for name, sym in indices.items():
+        try:
+            hist = yf.Ticker(sym).history(period="2d")
+            if len(hist) >= 2:
+                close = hist["Close"].iloc[-1]
+                prev = hist["Close"].iloc[-2]
+                chg = (close - prev) / prev * 100
+                arrow = "▲" if chg > 0 else "▼"
+                indices_text.append(f"{name}: {close:,.0f} {arrow}{abs(chg):.2f}%")
+        except:
+            pass
+
+    stocks = []
+    for sym in popular:
+        try:
+            hist = yf.Ticker(sym).history(period="5d")
+            if not hist.empty:
+                vol = int(hist["Volume"].sum())
+                close = hist["Close"].iloc[-1]
+                prev = hist["Close"].iloc[-2] if len(hist) > 1 else close
+                chg = (close - prev) / prev * 100
+                stocks.append({"symbol": sym, "vol": vol, "close": close, "change": chg})
+        except:
+            pass
+
+    stocks.sort(key=lambda x: x["vol"], reverse=True)
+
+    trump_news = [a for a in articles if "trump" in (a["title"] + a["summary"]).lower()]
+
+    return indices_text, stocks[:8], trump_news
+
+def analyze_us_stocks(indices_text, stocks, trump_news):
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    indices_str = " | ".join(indices_text) if indices_text else "資料暫無"
+    stocks_str = "\n".join([
+        f"{s['symbol']} | 近5日總量:{s['vol']:,} | 收盤:${s['close']:.2f} | 漲跌:{'+' if s['change']>0 else ''}{s['change']:.2f}%"
+        for s in stocks
+    ])
+    trump_str = "\n".join([f"[{a['source']}] {a['title']}: {a['summary']}" for a in trump_news[:5]]) if trump_news else "今日無相關言論"
+
+    prompt = f"""你是一位專業的美股分析師。請根據以下資料用繁體中文整理分析：
+
+大盤指數：{indices_str}
+
+近5日成交量最高熱門股：
+{stocks_str}
+
+川普相關新聞：
+{trump_str}
+
+請用以下格式回覆：
+
+🇺🇸 美股熱門股分析
+━━━━━━━━━━━━━━━
+📊 大盤：{indices_str}
+
+🔥 前5大熱門股：
+1. [代號] - $[收盤] [漲跌%]
+   分析：[為何熱門，投資關注點]
+
+2. ...
+
+🎙️ 川普言論影響：
+[若有言論，說明對市場的可能影響；若無則寫「今日無重大言論」]
+
+💡 今日美股操作建議：
+[2-3點實用建議]
+
+━━━━━━━━━━━━━━━
+⚠️ 以上為參考資訊，投資有風險，請謹慎評估"""
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1200,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return message.content[0].text.strip()
+
 def fetch_news():
     articles = []
     for source, url in RSS_FEEDS:
@@ -205,16 +291,21 @@ def main():
         return
 
     if mode == "daily":
+        send_line_message(result)
         try:
             top_stocks, days = get_taiwan_stocks()
             if top_stocks:
-                stock_report = analyze_taiwan_stocks(top_stocks, days)
-                send_line_message(result)
-                send_line_message(stock_report)
-                print("Done with stocks!")
-                return
+                send_line_message(analyze_taiwan_stocks(top_stocks, days))
         except Exception as e:
-            print(f"Stock error: {e}")
+            print(f"Taiwan stock error: {e}")
+        try:
+            indices_text, us_stocks, trump_news = get_us_stocks(articles)
+            if us_stocks:
+                send_line_message(analyze_us_stocks(indices_text, us_stocks, trump_news))
+        except Exception as e:
+            print(f"US stock error: {e}")
+        print("Done!")
+        return
 
     send_line_message(result)
     print("Done!")
