@@ -290,9 +290,50 @@ def send_line_message(text):
     print(f"LINE Broadcast: {response.status_code}")
     return response.ok
 
+def check_daily_sent():
+    """Return (already_sent_today, sha). Uses Taiwan time (UTC+8) as the day boundary."""
+    import base64
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    today = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d")
+    if not token or not repo:
+        return False, None
+    url = f"https://api.github.com/repos/{repo}/contents/last_daily.json"
+    r = requests.get(url, headers={"Authorization": f"token {token}"})
+    if r.status_code == 200:
+        raw = base64.b64decode(r.json()["content"]).decode()
+        data = json.loads(raw)
+        return data.get("date") == today, r.json()["sha"]
+    return False, None
+
+def mark_daily_sent(sha):
+    import base64
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    today = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d")
+    if not token or not repo:
+        return
+    content = base64.b64encode(json.dumps({"date": today}).encode()).decode()
+    payload = {"message": f"Daily sent {today}", "content": content}
+    if sha:
+        payload["sha"] = sha
+    requests.put(
+        f"https://api.github.com/repos/{repo}/contents/last_daily.json",
+        headers={"Authorization": f"token {token}", "Content-Type": "application/json"},
+        json=payload,
+    )
+
 def main():
     mode = os.environ.get("MODE", "daily")
     print(f"Mode: {mode}")
+
+    if mode == "daily":
+        already_sent, daily_sha = check_daily_sent()
+        if already_sent:
+            print("Daily news already sent today, skipping.")
+            return
+        mark_daily_sent(daily_sha)
+
     articles = fetch_news()
     print(f"Fetched {len(articles)} articles")
 
