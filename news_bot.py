@@ -1,10 +1,11 @@
 import os
 import json
+import re
 import hashlib
 import feedparser
 import anthropic
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 RSS_FEEDS = [
     # 國際綜合
@@ -35,21 +36,31 @@ RSS_FEEDS = [
     ("Wired", "https://www.wired.com/feed/rss"),
 ]
 
+_PREFIX_RE = re.compile(r'^(breaking|update|exclusive|developing|just in|alert|urgent)[:\s\-]+', re.IGNORECASE)
+
 def hash_title(title):
-    return hashlib.md5(title.encode()).hexdigest()
+    normalized = _PREFIX_RE.sub('', title).lower()
+    normalized = re.sub(r'[^\w\s]', '', normalized)
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return hashlib.md5(normalized.encode()).hexdigest()
 
 def load_seen():
     import base64
     token = os.environ.get("GITHUB_TOKEN", "")
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not token or not repo:
-        return set(), None
+        return {}, None
     url = f"https://api.github.com/repos/{repo}/contents/seen_news.json"
     r = requests.get(url, headers={"Authorization": f"token {token}"})
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     if r.status_code == 200:
-        content = base64.b64decode(r.json()["content"]).decode()
-        return set(json.loads(content)), r.json()["sha"]
-    return set(), None
+        raw = base64.b64decode(r.json()["content"]).decode()
+        data = json.loads(raw)
+        if isinstance(data, list):
+            data = {h: "1970-01-01T00:00:00+00:00" for h in data}
+        seen = {h: ts for h, ts in data.items() if ts >= cutoff}
+        return seen, r.json()["sha"]
+    return {}, None
 
 def save_seen(seen, sha):
     import base64
@@ -57,7 +68,9 @@ def save_seen(seen, sha):
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not token or not repo:
         return
-    content = base64.b64encode(json.dumps(list(seen)[-500:]).encode()).decode()
+    if len(seen) > 500:
+        seen = dict(sorted(seen.items(), key=lambda x: x[1], reverse=True)[:500])
+    content = base64.b64encode(json.dumps(seen).encode()).decode()
     payload = {"message": "Update seen news", "content": content}
     if sha:
         payload["sha"] = sha
@@ -285,11 +298,13 @@ def main():
 
     if mode == "breaking":
         seen, sha = load_seen()
+        now_ts = datetime.now(timezone.utc).isoformat()
         new_articles = [a for a in articles if hash_title(a["title"]) not in seen]
         if not new_articles:
             print("No new articles")
             return
-        seen.update(hash_title(a["title"]) for a in new_articles)
+        for a in new_articles:
+            seen[hash_title(a["title"])] = now_ts
         save_seen(seen, sha)
         articles = new_articles
         print(f"{len(articles)} new articles to check")
