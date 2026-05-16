@@ -136,19 +136,21 @@ def analyze_taiwan_stocks(top_stocks, days):
 
 {stocks_text}
 
-用繁體中文，極簡格式回覆（每行不超過25字）：
+用繁體中文極簡格式回覆，列出前5檔，每檔一行：
 
 📈 台股速報
 ─────────
-🔥 [代號 名稱] 收盤$[價] [漲跌] — [一句原因，10字內]
-🔥 [代號 名稱] 收盤$[價] [漲跌] — [一句原因，10字內]
-🔥 [代號 名稱] 收盤$[價] [漲跌] — [一句原因，10字內]
-💡 [一句操作方向，15字內]
+🔥 [代號 名稱] $[收盤] [漲跌] — [原因10字內]
+🔥 [代號 名稱] $[收盤] [漲跌] — [原因10字內]
+🔥 [代號 名稱] $[收盤] [漲跌] — [原因10字內]
+🔥 [代號 名稱] $[收盤] [漲跌] — [原因10字內]
+🔥 [代號 名稱] $[收盤] [漲跌] — [原因10字內]
+💡 [操作建議15字內]
 ⚠️ 投資有風險"""
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=300,
+        max_tokens=400,
         messages=[{"role": "user", "content": prompt}]
     )
     return message.content[0].text.strip()
@@ -201,7 +203,7 @@ def analyze_us_stocks(indices_text, stocks, trump_news):
     ])
     trump_str = "\n".join([f"[{a['source']}] {a['title']}: {a['summary']}" for a in trump_news[:5]]) if trump_news else "今日無相關言論"
 
-    prompt = f"""根據以下資料用繁體中文極簡回覆（每行不超過25字）：
+    prompt = f"""根據以下資料用繁體中文極簡回覆，列出前5檔熱門股，每檔一行：
 
 大盤：{indices_str}
 熱門股：{stocks_str}
@@ -211,17 +213,19 @@ def analyze_us_stocks(indices_text, stocks, trump_news):
 
 🇺🇸 美股速報
 ─────────
-📊 {indices_str}
-🔥 [代號] $[收盤] [漲跌%] — [一句原因，10字內]
-🔥 [代號] $[收盤] [漲跌%] — [一句原因，10字內]
-🔥 [代號] $[收盤] [漲跌%] — [一句原因，10字內]
+📊 [大盤數據一行]
+🔥 [代號] $[收盤] [漲跌%] — [原因10字內]
+🔥 [代號] $[收盤] [漲跌%] — [原因10字內]
+🔥 [代號] $[收盤] [漲跌%] — [原因10字內]
+🔥 [代號] $[收盤] [漲跌%] — [原因10字內]
+🔥 [代號] $[收盤] [漲跌%] — [原因10字內]
 🎙️ 川普：[一句影響，若無則省略此行]
-💡 [一句操作建議，15字內]
+💡 [操作建議15字內]
 ⚠️ 投資有風險"""
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=300,
+        max_tokens=400,
         messages=[{"role": "user", "content": prompt}]
     )
     return message.content[0].text.strip()
@@ -249,13 +253,22 @@ def analyze_with_claude(articles, mode):
     ])
     today = datetime.now(timezone.utc).strftime("%Y年%m月%d日")
     if mode == "daily":
-        prompt = ("以下是今天全球新聞，讀者是投資人。用繁體中文極簡格式回覆，每行不超過25字：\n\n"
+        prompt = ("以下是今天全球新聞，讀者是投資人。用繁體中文極簡格式回覆，規則：\n"
+                  "- 每則新聞：標題（來源）— 重點15字內\n"
+                  "- 全球要聞選2-3則，財經選2-3則，科技選1-2則\n"
+                  "- 不要額外解釋，不要分段落說明\n\n"
+                  "格式：\n"
                   "📰 今日速報 " + today + "\n"
                   "─────────\n"
-                  "🌍 [最重要全球要聞標題] — [一句影響，15字內]\n"
-                  "💰 [最重要財經新聞標題] — [一句影響，15字內]\n"
-                  "💻 [最重要科技新聞標題] — [一句影響，15字內]\n"
-                  "📌 今日重點：[一句話，20字內]\n\n"
+                  "🌍 全球\n"
+                  "· [標題]（來源）— [重點15字內]\n"
+                  "· [標題]（來源）— [重點15字內]\n"
+                  "💰 財經\n"
+                  "· [標題]（來源）— [重點15字內]\n"
+                  "· [標題]（來源）— [重點15字內]\n"
+                  "💻 科技\n"
+                  "· [標題]（來源）— [重點15字內]\n"
+                  "📌 [一句總結，20字內]\n\n"
                   "新聞資料：\n" + articles_text)
     else:
         prompt = ("以下是最新全球新聞。判斷是否有真正的突發重大新聞（重大天災、戰爭重大進展、重要領導人死亡、嚴重金融危機、重大恐怖攻擊）。\n\n"
@@ -266,7 +279,7 @@ def analyze_with_claude(articles, mode):
                   "新聞資料：\n" + articles_text)
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=400,
+        max_tokens=600,
         messages=[{"role": "user", "content": prompt}]
     )
     return message.content[0].text.strip()
