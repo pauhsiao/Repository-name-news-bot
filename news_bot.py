@@ -132,29 +132,23 @@ def analyze_taiwan_stocks(top_stocks, days):
         f"{code} {info['name']} | 近{days}日總量:{info['vol']:,} | 收盤:{info['close']} | 漲跌:{info['change']}"
         for code, info in top_stocks
     ])
-    prompt = f"""以下是台灣股市近{days}個交易日成交量前10名的熱門股票：
+    prompt = f"""台灣股市近{days}交易日成交量前10名：
 
 {stocks_text}
 
-請用繁體中文分析，格式如下：
+用繁體中文，極簡格式回覆（每行不超過25字）：
 
-📈 台股熱門股分析（近{days}日）
-━━━━━━━━━━━━━━━
-🔥 前5大熱門股：
-1. [代號 名稱] - 收盤$[價] [漲跌]
-   原因分析：[為何成交量大，可能的市場關注點]
-
-2. ...
-
-💡 今日操作建議：
-[根據熱門股和市場情況，給出2-3點實用的操作方向]
-
-━━━━━━━━━━━━━━━
-⚠️ 以上為參考資訊，投資有風險，請謹慎評估"""
+📈 台股速報
+─────────
+🔥 [代號 名稱] 收盤$[價] [漲跌] — [一句原因，10字內]
+🔥 [代號 名稱] 收盤$[價] [漲跌] — [一句原因，10字內]
+🔥 [代號 名稱] 收盤$[價] [漲跌] — [一句原因，10字內]
+💡 [一句操作方向，15字內]
+⚠️ 投資有風險"""
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=1000,
+        max_tokens=300,
         messages=[{"role": "user", "content": prompt}]
     )
     return message.content[0].text.strip()
@@ -207,40 +201,27 @@ def analyze_us_stocks(indices_text, stocks, trump_news):
     ])
     trump_str = "\n".join([f"[{a['source']}] {a['title']}: {a['summary']}" for a in trump_news[:5]]) if trump_news else "今日無相關言論"
 
-    prompt = f"""你是一位專業的美股分析師。請根據以下資料用繁體中文整理分析：
+    prompt = f"""根據以下資料用繁體中文極簡回覆（每行不超過25字）：
 
-大盤指數：{indices_str}
+大盤：{indices_str}
+熱門股：{stocks_str}
+川普新聞：{trump_str}
 
-近5日成交量最高熱門股：
-{stocks_str}
+格式：
 
-川普相關新聞：
-{trump_str}
-
-請用以下格式回覆：
-
-🇺🇸 美股熱門股分析
-━━━━━━━━━━━━━━━
-📊 大盤：{indices_str}
-
-🔥 前5大熱門股：
-1. [代號] - $[收盤] [漲跌%]
-   分析：[為何熱門，投資關注點]
-
-2. ...
-
-🎙️ 川普言論影響：
-[若有言論，說明對市場的可能影響；若無則寫「今日無重大言論」]
-
-💡 今日美股操作建議：
-[2-3點實用建議]
-
-━━━━━━━━━━━━━━━
-⚠️ 以上為參考資訊，投資有風險，請謹慎評估"""
+🇺🇸 美股速報
+─────────
+📊 {indices_str}
+🔥 [代號] $[收盤] [漲跌%] — [一句原因，10字內]
+🔥 [代號] $[收盤] [漲跌%] — [一句原因，10字內]
+🔥 [代號] $[收盤] [漲跌%] — [一句原因，10字內]
+🎙️ 川普：[一句影響，若無則省略此行]
+💡 [一句操作建議，15字內]
+⚠️ 投資有風險"""
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=1200,
+        max_tokens=300,
         messages=[{"role": "user", "content": prompt}]
     )
     return message.content[0].text.strip()
@@ -268,12 +249,24 @@ def analyze_with_claude(articles, mode):
     ])
     today = datetime.now(timezone.utc).strftime("%Y年%m月%d日")
     if mode == "daily":
-        prompt = "你是一位專業的財經新聞編輯，讀者是投資人。以下是今天來自全球各大新聞網的新聞，涵蓋國際、財經、科技三大類。\n請用繁體中文整理成每日摘要，格式如下：\n\n📰 今日重要資訊\n" + today + "\n━━━━━━━━━━━━━━━\n🌍 全球要聞（2-3則）\n1️⃣ [標題]（來源）\n[重點說明]\n\n💰 財經市場（2-3則，優先選對投資有影響的）\n1️⃣ [標題]（來源）\n[重點說明，說明對市場/投資的潛在影響]\n\n💻 科技動態（1-2則，優先選影響產業趨勢的）\n1️⃣ [標題]（來源）\n[重點說明]\n\n━━━━━━━━━━━━━━━\n📌 今日投資關注重點：[一句話總結今天最值得投資人注意的事]\n\n新聞資料：\n" + articles_text
+        prompt = ("以下是今天全球新聞，讀者是投資人。用繁體中文極簡格式回覆，每行不超過25字：\n\n"
+                  "📰 今日速報 " + today + "\n"
+                  "─────────\n"
+                  "🌍 [最重要全球要聞標題] — [一句影響，15字內]\n"
+                  "💰 [最重要財經新聞標題] — [一句影響，15字內]\n"
+                  "💻 [最重要科技新聞標題] — [一句影響，15字內]\n"
+                  "📌 今日重點：[一句話，20字內]\n\n"
+                  "新聞資料：\n" + articles_text)
     else:
-        prompt = "你是一位突發新聞編輯。以下是最新的全球新聞。\n請判斷是否有真正的突發重大新聞（重大天災、戰爭重大進展、重要領導人死亡、嚴重金融危機、重大恐怖攻擊等）。\n\n如果有，用繁體中文回覆：\n🚨 突發重大新聞\n━━━━━━━━━━━━━━━\n[標題]（來源）\n[3-4句重點說明]\n\n如果沒有突發重大新聞，只回覆：NONE\n\n新聞資料：\n" + articles_text
+        prompt = ("以下是最新全球新聞。判斷是否有真正的突發重大新聞（重大天災、戰爭重大進展、重要領導人死亡、嚴重金融危機、重大恐怖攻擊）。\n\n"
+                  "若有，用繁體中文極簡回覆：\n"
+                  "🚨 突發：[標題，20字內]\n"
+                  "[2句重點，每句15字內]\n\n"
+                  "若無，只回覆：NONE\n\n"
+                  "新聞資料：\n" + articles_text)
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=1500,
+        max_tokens=400,
         messages=[{"role": "user", "content": prompt}]
     )
     return message.content[0].text.strip()
