@@ -329,21 +329,48 @@ def mark_daily_sent(sha):
         json=payload,
     )
 
+def run_daily(articles=None):
+    already_sent, daily_sha = check_daily_sent()
+    if already_sent:
+        print("Daily already sent today, skipping.")
+        return
+    mark_daily_sent(daily_sha)
+    if articles is None:
+        articles = fetch_news()
+    result = analyze_with_claude(articles, "daily")
+    send_line_message(result)
+    try:
+        top_stocks, days = get_taiwan_stocks()
+        if top_stocks:
+            send_line_message(analyze_taiwan_stocks(top_stocks, days))
+    except Exception as e:
+        print(f"Taiwan stock error: {e}")
+    try:
+        indices_text, us_stocks, trump_news = get_us_stocks(articles)
+        if us_stocks:
+            send_line_message(analyze_us_stocks(indices_text, us_stocks, trump_news))
+    except Exception as e:
+        print(f"US stock error: {e}")
+    print("Daily done!")
+
+
 def main():
     mode = os.environ.get("MODE", "daily")
     print(f"Mode: {mode}")
 
     if mode == "daily":
-        already_sent, daily_sha = check_daily_sent()
-        if already_sent:
-            print("Daily news already sent today, skipping.")
-            return
-        mark_daily_sent(daily_sha)
+        run_daily()
+        return
 
     articles = fetch_news()
     print(f"Fetched {len(articles)} articles")
 
     if mode == "breaking":
+        # Fallback: if daily hasn't fired yet today and it's past 8am Taiwan time, send it now
+        taiwan_hour = (datetime.now(timezone.utc) + timedelta(hours=8)).hour
+        if taiwan_hour >= 8:
+            run_daily(articles)
+
         seen, sha = load_seen()
         now_ts = datetime.now(timezone.utc).isoformat()
         new_articles = [a for a in articles if hash_title(a["title"]) not in seen]
@@ -359,23 +386,6 @@ def main():
     result = analyze_with_claude(articles, mode)
     if mode == "breaking" and result == "NONE":
         print("No breaking news")
-        return
-
-    if mode == "daily":
-        send_line_message(result)
-        try:
-            top_stocks, days = get_taiwan_stocks()
-            if top_stocks:
-                send_line_message(analyze_taiwan_stocks(top_stocks, days))
-        except Exception as e:
-            print(f"Taiwan stock error: {e}")
-        try:
-            indices_text, us_stocks, trump_news = get_us_stocks(articles)
-            if us_stocks:
-                send_line_message(analyze_us_stocks(indices_text, us_stocks, trump_news))
-        except Exception as e:
-            print(f"US stock error: {e}")
-        print("Done!")
         return
 
     send_line_message(result)
