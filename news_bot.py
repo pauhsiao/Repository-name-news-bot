@@ -303,6 +303,22 @@ def send_line_message(text):
     print(f"LINE Push: {response.status_code} - {response.text[:100]}")
     return response.ok
 
+def send_pushover(text, title="📰 每日新聞推播"):
+    token = os.environ.get('PUSHOVER_TOKEN', '')
+    user  = os.environ.get('PUSHOVER_USER', '')
+    if not token or not user:
+        print("Pushover: 未設定 token/user，跳過")
+        return False
+    # Pushover 單則上限 1024 字元
+    msg = text[:1020] + "…" if len(text) > 1024 else text
+    response = requests.post(
+        "https://api.pushover.net/1/messages.json",
+        json={"token": token, "user": user, "title": title, "message": msg, "html": 0},
+        timeout=10,
+    )
+    print(f"Pushover: {response.status_code}")
+    return response.ok
+
 def check_daily_sent():
     """Return (already_sent_today, sha). Uses Taiwan time (UTC+8) as the day boundary."""
     import base64
@@ -346,16 +362,21 @@ def run_daily(articles=None):
         articles = fetch_news()
     result = analyze_with_claude(articles, "daily")
     send_line_message(result)
+    send_pushover(result, "📰 每日新聞摘要")
     try:
         top_stocks, days = get_taiwan_stocks()
         if top_stocks:
-            send_line_message(analyze_taiwan_stocks(top_stocks, days))
+            tw_msg = analyze_taiwan_stocks(top_stocks, days)
+            send_line_message(tw_msg)
+            send_pushover(tw_msg, "🇹🇼 台股分析")
     except Exception as e:
         print(f"Taiwan stock error: {e}")
     try:
         indices_text, us_stocks, trump_news = get_us_stocks(articles)
         if us_stocks:
-            send_line_message(analyze_us_stocks(indices_text, us_stocks, trump_news))
+            us_msg = analyze_us_stocks(indices_text, us_stocks, trump_news)
+            send_line_message(us_msg)
+            send_pushover(us_msg, "🇺🇸 美股分析")
     except Exception as e:
         print(f"US stock error: {e}")
     print("Daily done!")
