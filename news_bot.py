@@ -285,15 +285,22 @@ def analyze_with_claude(articles, mode):
     return message.content[0].text.strip()
 
 def send_line_message(text):
+    user_id = os.environ.get('LINE_USER_ID', '')
+    if user_id:
+        url = "https://api.line.me/v2/bot/message/push"
+        body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
+    else:
+        url = "https://api.line.me/v2/bot/message/broadcast"
+        body = {"messages": [{"type": "text", "text": text}]}
     response = requests.post(
-        "https://api.line.me/v2/bot/message/broadcast",
+        url,
         headers={
             "Authorization": f"Bearer {os.environ['LINE_CHANNEL_ACCESS_TOKEN']}",
             "Content-Type": "application/json",
         },
-        json={"messages": [{"type": "text", "text": text}]},
+        json=body,
     )
-    print(f"LINE Broadcast: {response.status_code}")
+    print(f"LINE Push: {response.status_code} - {response.text[:100]}")
     return response.ok
 
 def check_daily_sent():
