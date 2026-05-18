@@ -417,6 +417,7 @@ def main():
         return
 
     send_line_message(result)
+    send_pushover(result, "🚨 突發新聞" if mode == "breaking" else "📰 新聞推播")
     print("Done!")
 
 if __name__ == "__main__":
