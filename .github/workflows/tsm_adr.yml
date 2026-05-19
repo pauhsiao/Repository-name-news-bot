@@ -1,0 +1,20 @@
+name: tsm-adr-night
+on:
+  schedule:
+    - cron: '10 15 * * 1-5'  # 23:10 台灣時間（UTC+8），週一到週五
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: run-tsm-adr
+        env:
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+          MODE: tsm_adr
+        run: python news_bot.py

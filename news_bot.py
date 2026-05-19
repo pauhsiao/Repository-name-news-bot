@@ -382,9 +382,128 @@ def run_daily(articles=None):
     print("Daily done!")
 
 
+def run_tsm_adr():
+    import yfinance as yf
+    ticker = yf.Ticker("TSM")
+    hist = ticker.history(period="2d")
+    if hist.empty or len(hist) < 1:
+        send_pushover("TSM ADR 資料無法取得", "📡 TSM ADR 夜盤")
+        return
+
+    close = hist["Close"].iloc[-1]
+    prev = hist["Close"].iloc[-2] if len(hist) >= 2 else close
+    change = close - prev
+    pct = (change / prev * 100) if prev else 0
+    volume = int(hist["Volume"].iloc[-1])
+    day_high = hist["High"].iloc[-1]
+    day_low = hist["Low"].iloc[-1]
+
+    arrow = "▲" if change >= 0 else "▼"
+    sign = "+" if change >= 0 else ""
+
+    if pct >= 1.5:
+        mood = "強勢 💪 明早台積電可能跳空開高"
+    elif pct >= 0.5:
+        mood = "偏多 📈 明早台積電可能小高開"
+    elif pct >= -0.5:
+        mood = "平盤 😐 明早台積電開平附近"
+    elif pct >= -1.5:
+        mood = "偏弱 📉 明早台積電可能小低開"
+    else:
+        mood = "弱勢 😬 明早台積電可能跳空開低"
+
+    tw_time = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%m/%d %H:%M")
+    msg = (
+        f"TSM ADR｜{tw_time} 台灣時間\n"
+        f"現價：${close:.2f}　{arrow}{sign}{change:.2f}（{sign}{pct:.2f}%）\n"
+        f"日高：${day_high:.2f}　日低：${day_low:.2f}\n"
+        f"成交量：{volume:,}\n"
+        f"\n📌 {mood}"
+    )
+    send_pushover(msg, "📡 TSM ADR 夜盤動態")
+    print(f"TSM ADR sent: ${close:.2f} {sign}{pct:.2f}%")
+
+
+def run_us_close():
+    import yfinance as yf
+    indices = {"S&P500": "^GSPC", "那斯達克": "^IXIC", "道瓊": "^DJI", "費半SOX": "^SOX"}
+    popular = ["NVDA", "TSLA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "AMD", "TSM", "PLTR"]
+
+    index_lines = []
+    for name, sym in indices.items():
+        try:
+            hist = yf.Ticker(sym).history(period="2d")
+            if len(hist) >= 2:
+                c = hist["Close"].iloc[-1]
+                p = hist["Close"].iloc[-2]
+                pct = (c - p) / p * 100
+                arrow = "▲" if pct >= 0 else "▼"
+                index_lines.append(f"{name}: {c:,.0f} {arrow}{abs(pct):.2f}%")
+        except:
+            pass
+
+    movers = []
+    for sym in popular:
+        try:
+            hist = yf.Ticker(sym).history(period="2d")
+            if len(hist) >= 2:
+                c = hist["Close"].iloc[-1]
+                p = hist["Close"].iloc[-2]
+                pct = (c - p) / p * 100
+                movers.append({"sym": sym, "close": c, "pct": pct})
+        except:
+            pass
+
+    movers.sort(key=lambda x: abs(x["pct"]), reverse=True)
+    top5 = movers[:5]
+
+    index_str = "\n".join(index_lines) if index_lines else "大盤資料無法取得"
+    movers_str = "\n".join([
+        f"{'▲' if m['pct']>=0 else '▼'} {m['sym']} ${m['close']:.2f} ({'+' if m['pct']>=0 else ''}{m['pct']:.2f}%)"
+        for m in top5
+    ])
+
+    # 氣氛判斷
+    gspc_pct = next((m["pct"] for m in movers if m["sym"] == "^GSPC"), None)
+    sox_pct = next((m["pct"] for m in movers if m["sym"] == "^SOX"), None)
+    try:
+        sp_hist = yf.Ticker("^GSPC").history(period="2d")
+        sp_pct = (sp_hist["Close"].iloc[-1] - sp_hist["Close"].iloc[-2]) / sp_hist["Close"].iloc[-2] * 100
+        sox_hist = yf.Ticker("^SOX").history(period="2d")
+        sox_p = (sox_hist["Close"].iloc[-1] - sox_hist["Close"].iloc[-2]) / sox_hist["Close"].iloc[-2] * 100
+        if sp_pct > 0.5 and sox_p > 0.5:
+            sentiment = "強勢收盤 💪 明早台股可能開高"
+        elif sp_pct < -0.5 and sox_p < -0.5:
+            sentiment = "弱勢收盤 😬 明早台股可能開低"
+        else:
+            sentiment = "震盪收盤 😐 明早台股開平附近"
+    except:
+        sentiment = "資料計算中"
+
+    tw_time = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%m/%d %H:%M")
+    msg = (
+        f"🇺🇸 美股收盤｜{tw_time} 台灣時間\n"
+        f"─────────\n"
+        f"{index_str}\n"
+        f"\n🔥 今日最大波動\n"
+        f"{movers_str}\n"
+        f"\n📌 {sentiment}"
+    )
+    send_pushover(msg, "🇺🇸 美股收盤快報")
+    print("US close sent.")
+
+
 def main():
     mode = os.environ.get("MODE", "daily")
     print(f"Mode: {mode}")
+
+    if mode == "tsm_adr":
+        run_tsm_adr()
+        return
+
+    if mode == "us_close":
+        run_us_close()
+        return
 
     if mode == "daily":
         run_daily()

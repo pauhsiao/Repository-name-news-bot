@@ -1,0 +1,20 @@
+name: us-market-close
+on:
+  schedule:
+    - cron: '35 20 * * 1-5'  # 04:35 台灣時間隔天（美股收盤後 ~30min，UTC 20:35，EDT 4:35PM）
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: run-us-close
+        env:
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+          MODE: us_close
+        run: python news_bot.py
