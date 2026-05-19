@@ -1,7 +1,7 @@
 name: us-market-close
 on:
   schedule:
-    - cron: '35 20 * * 1-5'  # 04:35 台灣時間隔天（美股收盤後 ~30min，UTC 20:35，EDT 4:35PM）
+    - cron: '30 22 * * 1-5'  # 06:30 台灣時間隔天（UTC 22:30）
   workflow_dispatch:
 jobs:
   run:
