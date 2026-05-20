@@ -426,29 +426,37 @@ def run_tsm_adr():
 
 def run_us_close():
     import yfinance as yf
-    indices = {"S&P500": "^GSPC", "那斯達克": "^IXIC", "道瓊": "^DJI", "費半SOX": "^SOX"}
+    import time as _time
+
+    indices = [("S&P500", "^GSPC"), ("那斯達克", "^IXIC"), ("道瓊", "^DJI"), ("費半SOX", "^SOX")]
     popular = ["NVDA", "TSLA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "AMD", "TSM", "PLTR"]
 
     index_lines = []
-    for name, sym in indices.items():
-        try:
-            hist = yf.Ticker(sym).history(period="2d")
-            if len(hist) >= 2:
-                c = hist["Close"].iloc[-1]
-                p = hist["Close"].iloc[-2]
-                pct = (c - p) / p * 100
-                arrow = "▲" if pct >= 0 else "▼"
-                index_lines.append(f"{name}: {c:,.0f} {arrow}{abs(pct):.2f}%")
-        except:
-            pass
+    index_pcts = {}
+    for name, sym in indices:
+        for attempt in range(3):
+            try:
+                hist = yf.Ticker(sym).history(period="5d")
+                hist = hist.dropna()
+                if len(hist) >= 2:
+                    c = float(hist["Close"].iloc[-1])
+                    p = float(hist["Close"].iloc[-2])
+                    pct = (c - p) / p * 100
+                    arrow = "▲" if pct >= 0 else "▼"
+                    index_lines.append(f"{name}: {c:,.0f} {arrow}{abs(pct):.2f}%")
+                    index_pcts[sym] = pct
+                    break
+            except:
+                _time.sleep(1)
 
     movers = []
     for sym in popular:
         try:
-            hist = yf.Ticker(sym).history(period="2d")
+            hist = yf.Ticker(sym).history(period="5d")
+            hist = hist.dropna()
             if len(hist) >= 2:
-                c = hist["Close"].iloc[-1]
-                p = hist["Close"].iloc[-2]
+                c = float(hist["Close"].iloc[-1])
+                p = float(hist["Close"].iloc[-2])
                 pct = (c - p) / p * 100
                 movers.append({"sym": sym, "close": c, "pct": pct})
         except:
@@ -461,24 +469,26 @@ def run_us_close():
     movers_str = "\n".join([
         f"{'▲' if m['pct']>=0 else '▼'} {m['sym']} ${m['close']:.2f} ({'+' if m['pct']>=0 else ''}{m['pct']:.2f}%)"
         for m in top5
-    ])
+    ]) if top5 else "個股資料無法取得"
 
-    # 氣氛判斷
-    gspc_pct = next((m["pct"] for m in movers if m["sym"] == "^GSPC"), None)
-    sox_pct = next((m["pct"] for m in movers if m["sym"] == "^SOX"), None)
-    try:
-        sp_hist = yf.Ticker("^GSPC").history(period="2d")
-        sp_pct = (sp_hist["Close"].iloc[-1] - sp_hist["Close"].iloc[-2]) / sp_hist["Close"].iloc[-2] * 100
-        sox_hist = yf.Ticker("^SOX").history(period="2d")
-        sox_p = (sox_hist["Close"].iloc[-1] - sox_hist["Close"].iloc[-2]) / sox_hist["Close"].iloc[-2] * 100
+    sp_pct = index_pcts.get("^GSPC")
+    sox_p = index_pcts.get("^SOX")
+    if sp_pct is not None and sox_p is not None:
         if sp_pct > 0.5 and sox_p > 0.5:
             sentiment = "強勢收盤 💪 明早台股可能開高"
         elif sp_pct < -0.5 and sox_p < -0.5:
             sentiment = "弱勢收盤 😬 明早台股可能開低"
         else:
             sentiment = "震盪收盤 😐 明早台股開平附近"
-    except:
-        sentiment = "資料計算中"
+    elif sp_pct is not None:
+        if sp_pct > 0.5:
+            sentiment = "偏多收盤 📈 明早台股可能小高開"
+        elif sp_pct < -0.5:
+            sentiment = "偏弱收盤 📉 明早台股可能小低開"
+        else:
+            sentiment = "震盪收盤 😐 明早台股開平附近"
+    else:
+        sentiment = "大盤資料不足，請直接查看美股行情"
 
     tw_time = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%m/%d %H:%M")
     msg = (
